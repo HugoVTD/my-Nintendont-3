@@ -246,7 +246,65 @@ static s32 BTHandleData(void *arg,void *buffer,u16 len)
 		}
 
 		u32 prevButton = BTPad[chan].button;
-		BTPad[chan].button = ((R16((u32)((u8*)buffer+1))) & 0x1F9F) | ((~(*(((u8*)buffer)+21))&0x03)<<5);
+		
+		// Lectura base de botones del Wiimote + Nunchuk
+		u32 wm_btns = ((R16((u32)((u8*)buffer+1))) & 0x1F9F) | ((~(*(((u8*)buffer+21))&0x03)<<5);
+		u32 nun_btns = ~((R16((u32)((u8*)buffer+22)))); // Extensión (Nunchuk) si aplica
+		
+		u32 gc_buttons = wm_btns; // por defecto
+
+		// Verificamos si hay un modo activo por combinación con el botón 2
+		int mode = 0;
+		if ((stat->controller & C_NSWAP1) && ((stat->controller & (C_NSWAP2 | C_NSWAP3)) == 0)) 
+		{
+			mode = (stat->controller / C_NSWAP1);
+		}
+
+		if (mode == 1) 
+		{
+			// MODO 1: SMASH MELEE (Controles de Brawl) -> 2 + Izquierda
+			gc_buttons = 0;
+			if (wm_btns & WM_BUTTON_A)      gc_buttons |= PAD_BUTTON_A;      // A (Ataque Normal)
+			if (wm_btns & WM_BUTTON_B)      gc_buttons |= PAD_BUTTON_B;      // B (Ataque Especial)
+			if (nun_btns & NUN_BUTTON_C)    gc_buttons |= PAD_BUTTON_Y;      // Nunchuk C (Salto)
+			if (nun_btns & NUN_BUTTON_Z)    gc_buttons |= PAD_TRIGGER_R;     // Nunchuk Z (Escudo)
+			if (wm_btns & WM_BUTTON_MINUS)  gc_buttons |= PAD_TRIGGER_Z;     // - (Agarre)
+			if (wm_btns & WM_BUTTON_PLUS)   gc_buttons |= PAD_BUTTON_START;  // + (Pausa)
+			
+			// D-Pad para burlas
+			if (wm_btns & WM_BUTTON_UP)     gc_buttons |= PAD_BUTTON_UP;
+			if (wm_btns & WM_BUTTON_DOWN)   gc_buttons |= PAD_BUTTON_DOWN;
+			if (wm_btns & WM_BUTTON_LEFT)   gc_buttons |= PAD_BUTTON_LEFT;
+			if (wm_btns & WM_BUTTON_RIGHT)  gc_buttons |= PAD_BUTTON_RIGHT;
+		}
+		else if (mode == 4) 
+		{
+			// MODO 4: MARIO KART DOUBLE DASH -> 2 + Abajo
+			gc_buttons = 0;
+			if (wm_btns & WM_BUTTON_A)      gc_buttons |= PAD_BUTTON_A;      // A (Avanzar)
+			if (wm_btns & WM_BUTTON_B)      gc_buttons |= PAD_TRIGGER_R;     // B (Derrapar)
+			if (nun_btns & NUN_BUTTON_C)    gc_buttons |= PAD_BUTTON_X;      // Nunchuk C (Lanzar Item)
+			if (nun_btns & NUN_BUTTON_Z)    gc_buttons |= PAD_TRIGGER_Z;     // Nunchuk Z (Cambiar Personaje)
+			
+			// Botones adicionales asignados cómodamente
+			if (wm_btns & WM_BUTTON_ONE)    gc_buttons |= PAD_BUTTON_B;      // 1 (Frenar / Retroceder)
+			if (wm_btns & WM_BUTTON_MINUS)  gc_buttons |= PAD_TRIGGER_L;     // - (Item especial / Pitar)
+			if (wm_btns & WM_BUTTON_PLUS)   gc_buttons |= PAD_BUTTON_START;  // + (Pausa)
+			
+			// D-Pad para menús
+			if (wm_btns & WM_BUTTON_UP)     gc_buttons |= PAD_BUTTON_UP;
+			if (wm_btns & WM_BUTTON_DOWN)   gc_buttons |= PAD_BUTTON_DOWN;
+			if (wm_btns & WM_BUTTON_LEFT)   gc_buttons |= PAD_BUTTON_LEFT;
+			if (wm_btns & WM_BUTTON_RIGHT)  gc_buttons |= PAD_BUTTON_RIGHT;
+		}
+		else
+		{
+			// Mapeo por defecto de Nintendont
+			gc_buttons = ((R16((u32)((u8*)buffer+1))) & 0x1F9F) | ((~(*(((u8*)buffer+21))&0x03)<<5);
+		}
+
+		BTPad[chan].button = gc_buttons;
+
 		if((prevButton & WM_BUTTON_TWO) && BTPad[chan].button & WM_BUTTON_TWO)	//wiimote button TWO held down
 		{
 			switch (BTPad[chan].button & ~WM_BUTTON_TWO)
@@ -495,13 +553,13 @@ static s32 BTHandleData(void *arg,void *buffer,u16 len)
 						break;
 					default:
 					case 2:
-						data[6] = 0x63; data[7] = 0x03; //data
+						data[6] = 0xE3; data[7] = 0x03; //data
 						break;
 					case 3:
-						data[6] = 0x35; data[7] = 0x03; //data
+						data[6] = 0x93; data[7] = 0x03; //data
 						break;
 					case 4:
-						data[6] = 0x1F; data[7] = 0x03; //data
+						data[6] = 0x4B; data[7] = 0x03; //data
 						break;
 				}
 				bte_senddata(stat->sock,data,22);	//returns 0x22 Acknowledge output report and return function result
@@ -516,7 +574,7 @@ static s32 BTHandleData(void *arg,void *buffer,u16 len)
 				data[1] = 0x04; //write to registers
 				data[2] = 0xb0; data[3] = 0x00; data[4] = 0x33; //address
 				data[5] = 0x01; //length
-				data[6] = 0x01; //data IR mode basic
+				data[6] = 0x03; //data
 				bte_senddata(stat->sock,data,22);	//returns 0x22 Acknowledge output report and return function result
 				stat->transferstate = TRANSFER_WRITE_IR_MODE;
 				sync_after_write(arg, sizeof(struct BTPadStat));
@@ -536,286 +594,15 @@ static s32 BTHandleData(void *arg,void *buffer,u16 len)
 			}
 			else if(stat->transferstate == TRANSFER_WRITE_IR_REG30_8)
 			{
-				stat->transfertype = 0x37;
-				/* Finally enable reading */
-				u8 buf[3];
-				buf[0] = 0x12;	//set data reporting mode
-				buf[1] = 0x00;	//report only when data changes
-				buf[2] = stat->transfertype;
-				bte_senddata(stat->sock,buf,3);
+				u8 data[3];
+				data[0] = 0x12; //set data reporting mode
+				data[1] = 0x00; //report only when data changes
+				data[2] = 0x37; //Core Buttons and Accelerometer with 10 IR bytes and 6 Extension Bytes report
+				bte_senddata(stat->sock,data,3);	//returns 0x37 report
 				stat->transferstate = TRANSFER_CALIBRATE;
 				sync_after_write(arg, sizeof(struct BTPadStat));
 			}
 		}
-		else if(stat->transfertype == 0x34 || stat->transfertype == 0x37)
-		{
-			//reset
-			stat->controller = C_NOT_SET;
-			stat->timeout = read32(HW_TIMER);
-			stat->transferstate = TRANSFER_EXT1;
-			sync_after_write(arg, sizeof(struct BTPadStat));
-			if(chan < CHAN_NOT_SET)
-			{
-				BTPad[chan].used = C_NOT_SET;
-				sync_after_write(&BTPad[chan], sizeof(struct BTPadCont));
-			}
-		}
-		//fake wiiu pro controllers send 0x22 before accepting read commands
-		if(stat->transferstate == TRANSFER_CALIBRATE && stat->transfertype == 0x3D)
-		{
-			u8 buf[3];
-			buf[0] = 0x12;	//set data reporting mode
-			buf[1] = 0x00;	//report only when data changes
-			buf[2] = stat->transfertype;
-			bte_senddata(stat->sock,buf,3);
-			sync_after_write(arg, sizeof(struct BTPadStat));
-		}
 	}
 	return ERR_OK;
-}
-
-static s32 BTHandleConnect(void *arg,struct bte_pcb *pcb,u8 err)
-{
-	sync_before_read(arg, sizeof(struct BTPadStat));
-	struct BTPadStat *stat = (struct BTPadStat*)arg;
-
-	if(BTChannelsUsed >= 4)
-	{
-		bte_disconnect(stat->sock);
-		return ERR_OK;
-	}
-
-	u8 buf[3];
-
-	stat->channel = CHAN_NOT_SET;
-	stat->rumble = 0;
-
-	BTSetControllerState(stat->sock, LEDState[CHAN_NOT_SET]);
-
-	//wiimote extensions need some extra stuff first, start with getting its status
-	if(stat->transfertype == 0x34 || stat->transfertype == 0x37)
-	{
-		buf[0] = 0x12;	//set data reporting mode
-		buf[1] = 0x00;	//report only when data changes
-		buf[2] = 0x30; //get normal buttons once
-		bte_senddata(stat->sock,buf,3);
-		stat->transferstate = TRANSFER_CONNECT;
-		stat->controller = C_NOT_SET;
-		stat->timeout = read32(HW_TIMER);
-	}
-	else
-	{
-		//dbgprintf("Connected WiiU Pro Controller\n");
-		buf[0] = 0x12;	//set data reporting mode
-		buf[1] = 0x00;	//report only when data changes
-		buf[2] = stat->transfertype;
-		bte_senddata(stat->sock,buf,3);
-		stat->transferstate = TRANSFER_CALIBRATE;
-		stat->controller = C_CCP;
-	}
-
-	BTPadConnected[BTChannelsUsed] = stat;
-	sync_after_write(stat, sizeof(struct BTPadStat));
-	BTChannelsUsed++;
-	return ERR_OK;
-}
-
-static s32 BTHandleDisconnect(void *arg,struct bte_pcb *pcb,u8 err)
-{
-	//dbgprintf("Controller disconnected\n");
-	if(BTChannelsUsed) BTChannelsUsed--;
-	u32 i;
-	for(i = 0; i < 4; ++i)
-	{
-		if(BTPadConnected[i] == arg)
-		{
-			u32 chan = BTPadConnected[i]->channel;
-			if(chan != CHAN_NOT_SET)
-			{
-				BTPad[chan].used = C_NOT_SET;
-				sync_after_write(&BTPad[chan], 0x20);
-			}
-			while(i+1 < 4)
-			{
-				BTPadConnected[i] = BTPadConnected[i+1];
-				BTPadConnected[i+1] = NULL;
-				i++;
-			}
-			break;
-		}
-	}
-	return ERR_OK;
-}
-
-static int RegisterBTPad(struct BTPadStat *stat, struct bd_addr *_bdaddr)
-{
-	stat->bdaddr = *_bdaddr;
-	stat->sock = bte_new();
-
-	if(stat->sock == NULL)
-		return ERR_OK;
-
-	bte_arg(stat->sock, stat);
-	bte_received(stat->sock, BTHandleData);
-	bte_disconnected(stat->sock, BTHandleDisconnect);
-
-	bte_registerdeviceasync(stat->sock, _bdaddr, BTHandleConnect);
-	sync_after_write(stat, sizeof(struct BTPadStat));
-
-	return ERR_OK;
-}
-
-static s32 BTCompleteCB(s32 result,void *usrdata)
-{
-	u32 i;
-	struct bd_addr bdaddr;
-
-	if(result == ERR_OK)
-	{
-		for(i = 0; i <BTDevices->num_registered; i++)
-		{
-			BD_ADDR(&(bdaddr),BTDevices->registered[i].bdaddr[5],BTDevices->registered[i].bdaddr[4],BTDevices->registered[i].bdaddr[3],
-							BTDevices->registered[i].bdaddr[2],BTDevices->registered[i].bdaddr[1],BTDevices->registered[i].bdaddr[0]);
-
-			if(strstr(BTDevices->registered[i].name, "-UC") != NULL)	//if wiiu pro controller
-				BTPadStatus[i].transfertype = 0x3D;
-			else
-				BTPadStatus[i].transfertype = 0x34;
-			BTPadStatus[i].channel = CHAN_NOT_SET;
-			RegisterBTPad(&BTPadStatus[i],&(bdaddr));
-		}
-	}
-	return ERR_OK;
-}
-
-static s32 BTPatchCB(s32 result,void *usrdata)
-{
-	BTE_InitSub(BTCompleteCB);
-	return ERR_OK;
-}
-
-static s32 BTReadLinkKeyCB(s32 result,void *usrdata)
-{
-	BTE_ApplyPatch(BTPatchCB);
-	return ERR_OK;
-}
-
-static s32 BTInitCoreCB(s32 result, void *usrdata)
-{
-	if(result == ERR_OK)
-		BTE_ReadStoredLinkKey(BTKeys, CONF_PAD_MAX_REGISTERED, BTReadLinkKeyCB);
-	return ERR_OK;
-}
-
-u32 BTTimer = 0;
-u32 inited = 0;
-void BTInit(void)
-{
-	memset(BTKeys, 0, sizeof(struct linkkey_info) * CONF_PAD_MAX_REGISTERED);
-
-	memset(BTPad, 0, sizeof(struct BTPadCont)*4);
-	sync_after_write(BTPad, sizeof(struct BTPadCont)*4);
-
-	/* Both Motor and Channel free */
-	memset((void*)BTMotor, 0, 0x20);
-	sync_after_write((void*)BTMotor, 0x20);
-
-	BTE_Init();
-	BTE_InitCore(BTInitCoreCB);
-
-	BTTimer = read32(HW_TIMER);
-	u32 CheckTimer = read32(HW_TIMER);
-	inited = 1;
-	while(TimerDiffSeconds(CheckTimer) < 1)
-	{
-		BTUpdateRegisters();
-		udelay(200);
-	}
-}
-
-void BTUpdateRegisters(void)
-{
-	if(inited == 0)
-		return;
-
-	if(intr == 1)
-	{
-		intr = 0;
-		__readintrdataCB();
-		__issue_intrread();
-	}
-	if(bulk == 1)
-	{
-		bulk = 0;
-		__readbulkdataCB();
-		__issue_bulkread();
-	}
-
-	u32 i = 0, j = 0;
-	sync_before_read((void*)0x13003020,0x40);
-	for( ; i < BTChannelsUsed; ++i)
-	{
-		sync_before_read(BTPadConnected[i], sizeof(struct BTPadStat));
-		u32 LastChan = BTPadConnected[i]->channel;
-		u32 LastRumble = BTPadConnected[i]->rumble;
-		u32 CurChan = CHAN_NOT_SET;
-		u32 CurRumble = 0;
-		if(BTPadConnected[i]->controller != C_NOT_SET)
-		{
-			for( ; j < 4; ++j)
-			{
-				if(BTPadFree[j] == 1)
-				{
-					CurChan = j;
-					CurRumble = BTMotor[j];
-					j++;
-					break;
-				}
-			}
-		}
-		else if(TimerDiffSeconds(BTPadConnected[i]->timeout) >= 20)
-		{
-			bte_disconnect(BTPadConnected[i]->sock);
-			break;
-		}
-		if(CurRumble == 0)
-		{
-			if(LastRumble == 1)
-			{
-				if(TimerDiffTicks(BTPadConnected[i]->rumbletime) > 94922)
-					BTPadConnected[i]->rumbletime = 0;
-				else //extend to at least 1/20th of a second
-					CurRumble = 1;
-			}
-		}
-		else if(CurRumble == 1)
-		{
-			if(LastRumble != 1)
-				BTPadConnected[i]->rumbletime = read32(HW_TIMER);
-		}
-		else if(CurRumble == 2) //direct stop
-			CurRumble = 0;
-
-		if(LastChan != CurChan || LastRumble != CurRumble)
-		{
-			if(CurChan == CHAN_NOT_SET || ((LastChan != CHAN_NOT_SET) && CurChan < LastChan))
-			{
-				BTPad[LastChan].used = C_NOT_SET;
-				sync_after_write(&BTPad[LastChan], sizeof(struct BTPadCont));
-			}
-			BTPadConnected[i]->channel = CurChan;
-			BTPadConnected[i]->rumble = CurRumble;
-			if(BTPadConnected[i]->transfertype == 0x3D || BTPadConnected[i]->controller & (C_RUMBLE_WM | C_NUN) || ConfigGetConfig(NIN_CFG_CC_RUMBLE))
-				BTSetControllerState(BTPadConnected[i]->sock, LEDState[CurChan] | CurRumble);
-			else //classic controller doesnt have rumble, can be forced to wiimote if wanted
-				BTSetControllerState(BTPadConnected[i]->sock, LEDState[CurChan]);
-			sync_after_write(BTPadConnected[i], sizeof(struct BTPadStat));
-		}
-	}
-	if(TimerDiffSeconds(BTTimer) > 0)
-	{
-		//dbgprintf("tick\n");
-		l2cap_tmr(); //every second
-		BTTimer = read32(HW_TIMER);
-	}
 }
