@@ -1,10 +1,9 @@
-name: Build Nintendont
+name: Build Nintendont (produce boot.dol)
 
 on:
   push:
     branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -23,9 +22,17 @@ jobs:
         run: |
           ./Build.sh
 
-      - name: Upload Artifact
+      - name: Prepare boot.dol
+        run: |
+          if [ -f "loader/loader.dol" ]; then
+            cp loader/loader.dol boot.dol
+          else
+            cp $(find . -type f -iname '*.dol' -print -quit) boot.dol
+          }
+          ls -lh boot.dol
+
+      - name: Upload boot.dol artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nintendont-Build
-          path: |
-            loader/loader.dol
+          name: boot.dol
+          path: boot.dol
