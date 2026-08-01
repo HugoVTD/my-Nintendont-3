@@ -246,32 +246,27 @@ static s32 BTHandleData(void *arg,void *buffer,u16 len)
 		}
 
 		u32 prevButton = BTPad[chan].button;
-		
-		// Lectura base de botones del Wiimote + Nunchuk
-		u32 wm_btns = ((R16((u32)((u8*)buffer+1))) & 0x1F9F) | ((~(*(((u8*)buffer+21))&0x03)<<5);
-		u32 nun_btns = ~((R16((u32)((u8*)buffer+22)))); // Extensión (Nunchuk) si aplica
+
+		// Lectura base de botones del Wiimote + Nunchuk con los paréntesis corregidos
+		u32 wm_btns = (R16((u32)((u8*)buffer+1)) & 0x1F9F) | ((~(*((u8*)buffer+21)) & 0x03) << 5);
+		u32 nun_btns = ~(R16((u32)((u8*)buffer+22))); 
 		
 		u32 gc_buttons = wm_btns; // por defecto
 
-		// Verificamos si hay un modo activo por combinación con el botón 2
-		int mode = 0;
-		if ((stat->controller & C_NSWAP1) && ((stat->controller & (C_NSWAP2 | C_NSWAP3)) == 0)) 
-		{
-			mode = (stat->controller / C_NSWAP1);
-		}
+		// FIX: Forma matemáticamente correcta de extraer cualquier modo sin usar condicionales rotos
+		int mode = (stat->controller & (C_NSWAP1 | C_NSWAP2 | C_NSWAP3)) / C_NSWAP1;
 
 		if (mode == 1) 
 		{
 			// MODO 1: SMASH MELEE (Controles de Brawl) -> 2 + Izquierda
 			gc_buttons = 0;
-			if (wm_btns & WM_BUTTON_A)      gc_buttons |= PAD_BUTTON_A;      // A (Ataque Normal)
-			if (wm_btns & WM_BUTTON_B)      gc_buttons |= PAD_BUTTON_B;      // B (Ataque Especial)
-			if (nun_btns & NUN_BUTTON_C)    gc_buttons |= PAD_BUTTON_Y;      // Nunchuk C (Salto)
-			if (nun_btns & NUN_BUTTON_Z)    gc_buttons |= PAD_TRIGGER_R;     // Nunchuk Z (Escudo)
-			if (wm_btns & WM_BUTTON_MINUS)  gc_buttons |= PAD_TRIGGER_Z;     // - (Agarre)
-			if (wm_btns & WM_BUTTON_PLUS)   gc_buttons |= PAD_BUTTON_START;  // + (Pausa)
+			if (wm_btns & WM_BUTTON_A)      gc_buttons |= PAD_BUTTON_A;      
+			if (wm_btns & WM_BUTTON_B)      gc_buttons |= PAD_BUTTON_B;      
+			if (nun_btns & NUN_BUTTON_C)    gc_buttons |= PAD_BUTTON_Y;      
+			if (nun_btns & NUN_BUTTON_Z)    gc_buttons |= PAD_TRIGGER_R;     
+			if (wm_btns & WM_BUTTON_MINUS)  gc_buttons |= PAD_TRIGGER_Z;     
+			if (wm_btns & WM_BUTTON_PLUS)   gc_buttons |= PAD_BUTTON_START;  
 			
-			// D-Pad para burlas
 			if (wm_btns & WM_BUTTON_UP)     gc_buttons |= PAD_BUTTON_UP;
 			if (wm_btns & WM_BUTTON_DOWN)   gc_buttons |= PAD_BUTTON_DOWN;
 			if (wm_btns & WM_BUTTON_LEFT)   gc_buttons |= PAD_BUTTON_LEFT;
@@ -281,17 +276,15 @@ static s32 BTHandleData(void *arg,void *buffer,u16 len)
 		{
 			// MODO 4: MARIO KART DOUBLE DASH -> 2 + Abajo
 			gc_buttons = 0;
-			if (wm_btns & WM_BUTTON_A)      gc_buttons |= PAD_BUTTON_A;      // A (Avanzar)
-			if (wm_btns & WM_BUTTON_B)      gc_buttons |= PAD_TRIGGER_R;     // B (Derrapar)
-			if (nun_btns & NUN_BUTTON_C)    gc_buttons |= PAD_BUTTON_X;      // Nunchuk C (Lanzar Item)
-			if (nun_btns & NUN_BUTTON_Z)    gc_buttons |= PAD_TRIGGER_Z;     // Nunchuk Z (Cambiar Personaje)
+			if (wm_btns & WM_BUTTON_A)      gc_buttons |= PAD_BUTTON_A;      
+			if (wm_btns & WM_BUTTON_B)      gc_buttons |= PAD_TRIGGER_R;     
+			if (nun_btns & NUN_BUTTON_C)    gc_buttons |= PAD_BUTTON_X;      
+			if (nun_btns & NUN_BUTTON_Z)    gc_buttons |= PAD_TRIGGER_Z;     
 			
-			// Botones adicionales asignados cómodamente
-			if (wm_btns & WM_BUTTON_ONE)    gc_buttons |= PAD_BUTTON_B;      // 1 (Frenar / Retroceder)
-			if (wm_btns & WM_BUTTON_MINUS)  gc_buttons |= PAD_TRIGGER_L;     // - (Item especial / Pitar)
-			if (wm_btns & WM_BUTTON_PLUS)   gc_buttons |= PAD_BUTTON_START;  // + (Pausa)
+			if (wm_btns & WM_BUTTON_ONE)    gc_buttons |= PAD_BUTTON_B;      
+			if (wm_btns & WM_BUTTON_MINUS)  gc_buttons |= PAD_TRIGGER_L;     
+			if (wm_btns & WM_BUTTON_PLUS)   gc_buttons |= PAD_BUTTON_START;  
 			
-			// D-Pad para menús
 			if (wm_btns & WM_BUTTON_UP)     gc_buttons |= PAD_BUTTON_UP;
 			if (wm_btns & WM_BUTTON_DOWN)   gc_buttons |= PAD_BUTTON_DOWN;
 			if (wm_btns & WM_BUTTON_LEFT)   gc_buttons |= PAD_BUTTON_LEFT;
@@ -299,8 +292,8 @@ static s32 BTHandleData(void *arg,void *buffer,u16 len)
 		}
 		else
 		{
-			// Mapeo por defecto de Nintendont
-			gc_buttons = ((R16((u32)((u8*)buffer+1))) & 0x1F9F) | ((~(*(((u8*)buffer+21))&0x03)<<5);
+			// Mapeo por defecto de Nintendont (paréntesis corregidos)
+			gc_buttons = (R16((u32)((u8*)buffer+1)) & 0x1F9F) | ((~(*((u8*)buffer+21)) & 0x03) << 5);
 		}
 
 		BTPad[chan].button = gc_buttons;
