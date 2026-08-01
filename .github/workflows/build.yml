@@ -15,6 +15,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Fix modern GCC strict errors
+        run: |
+          echo "CFLAGS += -Wno-error=incompatible-pointer-types" >> multidol/Makefile
+
       - name: Run Build Script
         run: |
           ./Build.sh
@@ -24,5 +28,4 @@ jobs:
         with:
           name: Nintendont-Build
           path: |
-            loader/boot.dol
             loader/loader.dol
